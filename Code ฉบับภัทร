@@ -1,0 +1,107 @@
+void Line_Notify(String message) ;
+#include <ESP8266WiFi.h>
+
+//////////////////////////////////////////////////////////////////
+const int GasPin = A0;  // ประกาศขา A0 ต่อกับ sensor MQ-2
+const int GreenPin = D3; // ประกาศขา D3 ต่อกับ หลอด LED สีเขียว
+const int RedPin = D4;      // ประกาศขา D4 ต่อกับ หลอด LED สีแดง
+
+//////////////////////////////////////////////////////////////////
+const int timedelay = 1000; //เวลาในการ delay สำหรับอุ่นหัวก่อนเริ่มโปรแกรม 1000 = 1 วินาที แนะนำที่ 30000 หรื 30 วินาที
+const int alertGas = 400; //ปรับตั้งความหนาของ Gas ตังตามความเหมาะสม สำหรับส่งข้อความแจ้งใน Line ค่าที่แนะนำ 400
+
+//////////////////////////////////////////////////////////////////
+int GasValue = 0;        // ตัวแปรแก๊ส ห้ามแก้ไข
+
+//////////////////////////////////////////////////////////////////
+
+// Config connect WiFi
+#define WIFI_SSID "9arduino" //เราต้องแก้ไขใหม่
+#define WIFI_PASSWORD "tv357911itv" //เราต้องแก้ไขใหม่
+// Line config
+#define LINE_TOKEN "t2xkNKibZ3e9frce353bhGlHrwFLDPXphYkwfYYHjWB" //เราต้องแก้ไขใหม่
+
+String message = "ตรวจพบแก๊สรั่ว"; // ข้อความสำหรับแจ้งเตือนเมื่อมี Gas เกินค่าที่ตั้งไว้
+
+void setup() {
+  Serial.begin(9600); //ปล่อยไว้
+  pinMode(GreenPin, OUTPUT); //ให้เป็นข้อมูลออก แสดงไฟสีเขียว
+  pinMode(RedPin, OUTPUT); //ให้เป็นข้อมูลออก แสดงไฟสีแดง
+  digitalWrite(GreenPin, HIGH); //ไฟเขียวสว่าง
+  digitalWrite(RedPin, HIGH); //ไฟแดงสว่าง
+
+  Serial.println("Project Alert Gas Sensor Line Notify ");
+  delay(timedelay);
+
+
+  WiFi.mode(WIFI_STA);
+  // connect to wifi.
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("connecting");
+
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println();
+  Serial.print("connected: ");
+  Serial.println(WiFi.localIP());
+
+}
+
+void loop() {
+  GasValue = analogRead(GasPin);
+  Serial.print("Sensor Gas = ");
+  Serial.println(GasValue);
+
+  if (GasValue >= alertGas) {
+    digitalWrite(GreenPin, HIGH); //ถ้าค่าความหนาของแก๊สมากกว่าหรือเท่ากับ 400 ไฟเขียวสว่าง / ไฟแดงดับ
+    digitalWrite(RedPin, LOW);
+    Serial.println("Alert Send Line Notify !"); //ส่งข้อความไปที่ไลน์
+    Line_Notify(message);
+    while(GasValue >= alertGas){ //ถ้าค่าความหนาของแก๊สน้อยกว่าหรือเท่ากับ 400 ....
+    GasValue = analogRead(GasPin);
+    delay(10); //ดีเลย์ 10
+    }
+  }
+  else {
+    digitalWrite(GreenPin, LOW); //ถ้าไม่มีอะไรเกิดขึ้น ไฟแดงจะสว่าง ไฟเขียวจะดับ
+    digitalWrite(RedPin, HIGH);
+  }
+  delay(1000); // 1000 = 1000 ms = 1 sec (ดีเลย์ 1 วินาที)
+}
+
+void Line_Notify(String message) {
+  WiFiClientSecure client; 
+  
+  if (!client.connect("notify-api.line.me", 443)) {
+    Serial.println("connection failed");
+    return;   
+  }
+
+  String req = "";
+  req += "POST /api/notify HTTP/1.1\r\n";
+  req += "Host: notify-api.line.me\r\n";
+  req += "Authorization: Bearer " + String(LINE_TOKEN) + "\r\n";
+  req += "Cache-Control: no-cache\r\n";
+  req += "User-Agent: ESP8266\r\n";
+  req += "Connection: close\r\n";
+  req += "Content-Type: application/x-www-form-urlencoded\r\n";
+  req += "Content-Length: " + String(String("message=" + message).length()) + "\r\n";
+  req += "\r\n";
+  req += "message=" + message;
+  // Serial.println(req);
+  client.print(req);
+    
+  delay(20);
+
+  // Serial.println("-------------");
+  while(client.connected()) {
+    String line = client.readStringUntil('\n');
+    if (line == "\r") {
+      break;
+    }
+    //Serial.println(line);
+  }
+  // Serial.println("-------------");
+}
